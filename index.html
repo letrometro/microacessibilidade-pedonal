@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14213D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Microacessib.">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Microacessibilidades — Lisboa</title>
+<link rel="stylesheet" href="vendor/leaflet.css">
+<script src="vendor/supabase.js"></script>
+<script src="sync.js"></script>
+<script src="vendor/leaflet.js"></script>
+<style>
+  :root{
+    --bg:#EEF2F7; --surface:#FFFFFF; --ink:#14213D; --ink-soft:#43506A;
+    --muted:#7A8AA0; --line:#DCE3EC; --line-soft:#EAF0F6;
+    --accent:#1E5FD6; --accent-soft:#E8F0FE; --accent-ink:#123f95;
+    --yes:#157F45; --yes-soft:#E4F3EA;
+    --no:#C62828; --no-soft:#FBE9E9;
+    --media:#B36B00; --media-soft:#FCEFDC;
+    --na:#5B6B82; --na-soft:#ECF0F5;
+    --radius:16px; --radius-sm:11px;
+    --shadow:0 1px 2px rgba(20,33,61,.06),0 6px 20px rgba(20,33,61,.06);
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:var(--font); background:var(--bg); color:var(--ink);
+    line-height:1.45; -webkit-font-smoothing:antialiased;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  input,select,textarea{font-family:inherit;font-size:16px}
+  :focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:8px}
+
+  /* ---------- App shell ---------- */
+  .app{max-width:620px;margin:0 auto;min-height:100vh}
+  header.top{
+    position:sticky;top:0;z-index:40;background:var(--ink);color:#fff;
+    padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;
+    display:flex;align-items:center;gap:12px;
+  }
+  header.top .mark{
+    width:34px;height:34px;border-radius:9px;background:#fff;flex:0 0 auto;
+    display:grid;place-items:center;color:var(--ink);
+  }
+  header.top h1{font-size:16px;margin:0;font-weight:700;letter-spacing:-.2px;line-height:1.1}
+  header.top .sub{font-size:11.5px;color:#B9C4DA;font-weight:500;letter-spacing:.3px;text-transform:uppercase}
+  header.top .back{
+    margin-left:auto;background:rgba(255,255,255,.13);color:#fff;
+    padding:9px 14px;border-radius:10px;font-weight:600;font-size:14px;
+  }
+  header.top .back:active{background:rgba(255,255,255,.25)}
+
+  .wrap{padding:16px 16px 100px}
+
+  /* ---------- List view ---------- */
+  .list-head{display:flex;align-items:baseline;justify-content:space-between;margin:4px 2px 14px;gap:10px}
+  .list-head h2{font-size:20px;margin:0;letter-spacing:-.4px}
+  .list-head-right{display:flex;align-items:center;gap:9px;flex:0 0 auto}
+  .count-pill{font-size:12.5px;color:var(--muted);font-weight:600}
+  .sync-pill{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;
+    color:var(--ink-soft);background:var(--surface);border:1px solid var(--line);
+    padding:6px 10px;border-radius:100px}
+  .sync-pill:active{background:var(--line-soft)}
+  .icon-btn{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
+    border-radius:100px;background:var(--surface);border:1px solid var(--line);color:var(--ink-soft);flex:0 0 auto}
+  .icon-btn:active{background:var(--line-soft)}
+  .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+  .sync-dot.idle{background:var(--yes)}
+  .sync-dot.syncing{background:var(--accent);animation:syncPulse 1s ease-in-out infinite}
+  .sync-dot.error{background:var(--no)}
+  .sync-dot.offline{background:var(--na)}
+  .sync-dot.unconfigured{background:var(--line)}
+  @keyframes syncPulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .empty{
+    text-align:center;padding:54px 24px;color:var(--muted);
+    background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+  }
+  .empty .ico{font-size:34px;margin-bottom:10px}
+  .empty p{margin:0 0 4px;font-weight:600;color:var(--ink-soft)}
+  .empty span{font-size:13.5px}
+
+  .card-list{display:flex;flex-direction:column;gap:11px}
+  .estab{
+    background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);
+    border:1px solid var(--line-soft);padding:13px 14px;width:100%;text-align:left;
+    display:flex;align-items:center;gap:13px;
+  }
+  .estab-body{flex:1;min-width:0}
+  .thumb{
+    flex:0 0 auto;width:52px;height:52px;border-radius:12px;display:block;
+    background-size:cover;background-position:center;background-color:var(--line-soft);
+  }
+  .thumb.empty{display:grid;place-items:center;font-size:22px;color:#AEBACD}
+  .estab:active{transform:scale(.995)}
+  .estab .row1{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .estab .nm{font-weight:700;font-size:16px;letter-spacing:-.2px;flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .estab .meta{font-size:12.5px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .estab .meta .dot{width:3px;height:3px;border-radius:50%;background:var(--muted);display:inline-block}
+  .badge{
+    font-size:11px;font-weight:700;padding:4px 9px;border-radius:100px;
+    letter-spacing:.2px;flex:0 0 auto;white-space:nowrap;
+  }
+  .badge.baixa{background:var(--yes-soft);color:var(--yes)}
+  .badge.media{background:var(--media-soft);color:var(--media)}
+  .badge.alta{background:var(--no-soft);color:var(--no)}
+  .badge.inc{background:var(--na-soft);color:var(--na)}
+  .tag{font-size:11px;font-weight:600;background:var(--accent-soft);color:var(--accent-ink);
+    padding:3px 8px;border-radius:6px}
+
+  /* Sumário em destaque */
+  .summary{background:var(--ink);color:#fff;border-radius:var(--radius);padding:16px 18px;
+    margin-bottom:13px;box-shadow:var(--shadow)}
+  .s-big{display:flex;align-items:baseline;gap:9px}
+  .s-num{font-size:40px;font-weight:800;letter-spacing:-1.5px;line-height:1}
+  .s-lbl{font-size:13px;color:#AFBBD2;font-weight:600}
+  .s-stats{display:flex;gap:8px;margin-top:15px}
+  .s-stat{flex:1;background:rgba(255,255,255,.09);border-radius:12px;padding:11px 6px;text-align:center;
+    font-family:inherit;color:inherit;border:1.5px solid transparent}
+  .s-stat.clickable:active{background:rgba(255,255,255,.18)}
+  .s-stat.active{border-color:currentColor;background:rgba(255,255,255,.18)}
+  .s-stat .n{font-size:21px;font-weight:800;line-height:1}
+  .s-stat .t{font-size:10.5px;color:#AFBBD2;font-weight:600;margin-top:4px;letter-spacing:.1px}
+  .s-stat.baixa .n{color:#69DDA0}
+  .s-stat.media .n{color:#F5C177}
+  .s-stat.alta .n{color:#FF9E9E}
+  .s-big.clickable{cursor:pointer}
+  .s-big.clickable:active .s-num{opacity:.7}
+
+  /* Separadores */
+  .tabbar{display:flex;gap:6px;background:var(--line-soft);padding:4px;border-radius:12px;margin-bottom:14px;
+    overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tab{flex:0 0 auto;padding:9px 13px;border-radius:9px;font-weight:700;font-size:13px;color:var(--muted);white-space:nowrap}
+  .tab[aria-pressed="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(20,33,61,.12)}
+  .tab:active{transform:scale(.97)}
+
+  /* ---------- Barra inferior (Registos / Mapa / Acerca) ---------- */
+  .bottombar{position:fixed;left:0;right:0;bottom:0;z-index:30;max-width:620px;margin:0 auto}
+  .tabnav{display:flex;background:var(--surface);border-top:1px solid var(--line-soft);
+    padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 12px rgba(20,33,61,.06)}
+  .tabnav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:9px 4px 8px;color:var(--muted);font-size:10.5px;font-weight:700}
+  .tabnav-btn svg{width:22px;height:22px}
+  .tabnav-btn[aria-pressed="true"]{color:var(--accent)}
+  .fab-new{
+    position:absolute;right:16px;bottom:calc(100% + 14px);width:56px;height:56px;
+    border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;
+    box-shadow:0 6px 16px rgba(30,95,214,.35);border:none;
+  }
+  .fab-new:active{background:var(--accent-ink)}
+
+  /* ---------- Mapa ---------- */
+  .map-canvas{height:65vh;min-height:320px;border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+  .leaflet-div-icon{background:transparent;border:none}
+  .marker-dot{display:block;width:16px;height:16px;border-radius:50%;border:2.5px solid #fff;
+    box-shadow:0 1px 4px rgba(20,33,61,.4);box-sizing:border-box}
+  .marker-dot.baixa{background:var(--yes)} .marker-dot.media{background:var(--media)} .marker-dot.alta{background:var(--no)}
+  .marker-dot.inc{background:var(--na)}
+  .map-popup{font-family:var(--font)}
+  .map-popup .nm{font-weight:700;font-size:14px;margin-bottom:4px}
+  .map-popup a{color:var(--accent);font-weight:700;font-size:13px}
+
+  /* ---------- Acerca ---------- */
+  .about-body{padding:16px 18px}
+  .about-body p{margin:0 0 12px;color:var(--ink-soft);font-size:14px;line-height:1.55}
+  .about-body p:last-child{margin-bottom:0}
+  .about-body h4{margin:0 0 6px;font-size:13px;color:var(--ink)}
+  .about-version{font-size:12px;color:var(--muted);text-align:center;margin-top:18px}
+  .btn{
+    width:100%;padding:15px;border-radius:13px;font-weight:700;font-size:16px;
+    display:flex;align-items:center;justify-content:center;gap:9px;letter-spacing:-.1px;
+  }
+  .btn-primary{background:var(--accent);color:#fff;box-shadow:0 6px 16px rgba(30,95,214,.28)}
+  .btn-primary:active{background:var(--accent-ink)}
+  .btn-ghost{background:var(--surface);color:var(--ink);border:1.5px solid var(--line)}
+  .btn-ghost:active{background:var(--line-soft)}
+  .btn-danger{background:var(--no-soft);color:var(--no);border:1.5px solid #F3C9C9}
+  .btn-row{display:flex;gap:10px;margin-top:12px}
+  .btn-row .btn{flex:1}
+
+  /* ---------- Form ---------- */
+  section.block{
+    background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);
+    border:1px solid var(--line-soft);margin-bottom:14px;overflow:hidden;
+  }
+  .block-title{
+    display:flex;align-items:center;gap:9px;padding:14px 16px 12px;
+    border-bottom:1px solid var(--line-soft);
+  }
+  .block-title .eyebrow{font-size:11px;font-weight:700;color:var(--accent);
+    text-transform:uppercase;letter-spacing:1px}
+  .block-title h3{font-size:16px;margin:2px 0 0;letter-spacing:-.3px}
+  .block-body{padding:15px 16px}
+
+  .field{margin-bottom:14px}
+  .field:last-child{margin-bottom:0}
+  .field label{display:block;font-size:13px;font-weight:600;color:var(--ink-soft);margin-bottom:6px}
+  .field input[type=text],.field select,.field textarea{
+    width:100%;padding:12px 13px;border:1.5px solid var(--line);border-radius:var(--radius-sm);
+    background:#fff;color:var(--ink);
+  }
+  .field select{appearance:none;-webkit-appearance:none;
+    background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="%2343506A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+    background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
+  .field textarea{min-height:64px;resize:vertical;line-height:1.4}
+  .field input::placeholder,.field textarea::placeholder{color:#A9B4C6}
+  .required::after{content:" *";color:var(--no)}
+
+  .geo-row{display:flex;gap:9px;align-items:stretch}
+  .geo-row input{flex:1;min-width:0}
+  .geo-btn{
+    flex:0 0 auto;background:var(--accent-soft);color:var(--accent-ink);
+    padding:0 14px;border-radius:var(--radius-sm);font-weight:700;font-size:13.5px;
+    display:flex;align-items:center;gap:6px;border:1.5px solid #CBDCF7;
+  }
+  .geo-btn:active{background:#D5E4FB}
+  .geo-btn.loading{opacity:.6;pointer-events:none}
+
+  /* segmented */
+  .seg{display:flex;gap:8px}
+  .seg.three .opt{flex:1}
+  .seg.acts{flex-wrap:wrap}
+  .seg.acts .opt{flex:1;min-width:130px}
+  .opt{
+    padding:13px 8px;border:1.5px solid var(--line);border-radius:var(--radius-sm);
+    background:#fff;font-weight:600;font-size:14.5px;color:var(--ink-soft);text-align:center;
+    min-height:48px;display:flex;align-items:center;justify-content:center;gap:6px;
+    transition:transform .04s;
+  }
+  .opt:active{transform:scale(.97)}
+  .opt[aria-pressed="true"]{border-width:2px}
+  .opt.baixa[aria-pressed="true"]{background:var(--yes-soft);border-color:var(--yes);color:var(--yes)}
+  .opt.media[aria-pressed="true"]{background:var(--media-soft);border-color:var(--media);color:var(--media)}
+  .opt.alta[aria-pressed="true"]{background:var(--no-soft);border-color:var(--no);color:var(--no)}
+  .opt.cat[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+
+  /* ---------- Photo ---------- */
+  .photo-drop{
+    width:100%;border:2px dashed var(--line);border-radius:14px;background:var(--line-soft);
+    padding:26px 16px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--accent-ink);
+  }
+  .photo-drop:active{background:#E3EAF3}
+  .photo-drop .pd-ic{
+    width:58px;height:58px;border-radius:15px;background:#fff;display:grid;place-items:center;
+    color:var(--accent);margin-bottom:8px;box-shadow:var(--shadow);
+  }
+  .photo-drop .pd-title{font-weight:700;font-size:15px;color:var(--ink)}
+  .photo-drop .pd-sub{font-size:12.5px;color:var(--muted)}
+  .photo-preview{border-radius:14px;overflow:hidden;background:#0d1526;line-height:0}
+  .photo-preview img{display:block;width:100%;max-height:300px;object-fit:cover}
+  .photo-actions{display:flex;gap:8px;margin-top:10px}
+  .photo-act{
+    flex:1;padding:12px;border-radius:11px;background:var(--accent-soft);color:var(--accent-ink);
+    font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;gap:6px;
+    border:1.5px solid #CBDCF7;
+  }
+  .photo-act:active{background:#D5E4FB}
+  .photo-act.danger{background:var(--no-soft);color:var(--no);border-color:#F3C9C9;flex:0 0 auto;padding:12px 16px}
+
+  /* ---------- Modal / toast ---------- */
+  .toast{
+    position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:600;
+    box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:100;opacity:0;pointer-events:none;
+    transition:opacity .25s,transform .25s;max-width:88%;text-align:center;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .sheet-bg{position:fixed;inset:0;background:rgba(20,33,61,.5);z-index:90;opacity:0;
+    pointer-events:none;transition:opacity .2s}
+  .sheet-bg.show{opacity:1;pointer-events:auto}
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:91;background:var(--surface);
+    border-radius:20px 20px 0 0;padding:8px 18px calc(env(safe-area-inset-bottom) + 20px);
+    max-width:620px;margin:0 auto;transform:translateY(100%);transition:transform .25s;
+  }
+  .sheet.show{transform:translateY(0)}
+  .sheet .grab{width:38px;height:4px;border-radius:100px;background:var(--line);margin:8px auto 14px}
+  .sheet h3{margin:0 0 4px;font-size:18px;letter-spacing:-.3px}
+  .sheet p{margin:0 0 16px;color:var(--muted);font-size:13.5px}
+  .sub-options{display:flex;flex-direction:column;gap:8px;max-height:45vh;overflow-y:auto;margin-bottom:6px}
+  .sub-opt{padding:13px 14px;border:1.5px solid var(--line);border-radius:var(--radius-sm);
+    background:#fff;font-weight:600;font-size:14.5px;color:var(--ink-soft);text-align:left}
+  .sub-opt:active{background:var(--line-soft)}
+  .sub-opt[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+
+  .hint{font-size:12px;color:var(--muted);margin:14px 4px 0;text-align:center;line-height:1.5}
+  .vlegend{display:flex;gap:14px;margin-top:12px;font-size:11.5px;color:var(--ink-soft);font-weight:600;flex-wrap:wrap}
+  .vlegend .k{display:flex;align-items:center;gap:5px}
+  .vlegend .sw{width:9px;height:9px;border-radius:3px;display:inline-block}
+  .sw.baixa{background:var(--yes)} .sw.media{background:var(--media)} .sw.alta{background:var(--no)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="mark" aria-hidden="true">
+      <img src="icons/logo.png" alt="" width="22" height="22">
+    </div>
+    <div>
+      <h1 id="topTitle">Microacessibilidades</h1>
+      <div class="sub" id="topSub">Lisboa · Espaço público</div>
+    </div>
+    <button class="back" id="backBtn" style="display:none" onclick="goList()">Fechar</button>
+  </header>
+
+  <!-- LIST VIEW -->
+  <div class="wrap" id="listView">
+    <div class="list-head">
+      <h2>Registos</h2>
+      <div class="list-head-right">
+        <span class="count-pill" id="countPill"></span>
+        <button class="icon-btn" onclick="exportAll()" title="Exportar todos os registos (CSV)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="sync-pill" id="syncPill" onclick="changeEquipa()" title="Código de equipa e estado de sincronização">
+          <span class="sync-dot unconfigured" id="syncDot"></span>
+          <span id="syncLabel">sync desligado</span>
+        </button>
+      </div>
+    </div>
+    <div class="summary" id="summaryCard"></div>
+    <div class="tabbar" id="tabBar"></div>
+    <div id="listBody"></div>
+  </div>
+
+  <!-- MAP VIEW -->
+  <div class="wrap" id="mapView" style="display:none">
+    <div class="list-head">
+      <h2>Mapa</h2>
+      <span class="count-pill" id="mapCountPill"></span>
+    </div>
+    <div class="empty" id="mapEmpty" style="display:none">
+      <div class="ico">🗺️</div>
+      <p>Sem localizações registadas</p>
+      <span>Adiciona coordenadas (GPS) aos registos para as veres aqui.</span>
+    </div>
+    <div class="map-canvas" id="mapCanvas"></div>
+    <div class="vlegend" style="margin-top:12px">
+      <span class="k"><i class="sw baixa"></i>Gravidade baixa</span>
+      <span class="k"><i class="sw media"></i>Gravidade média</span>
+      <span class="k"><i class="sw alta"></i>Gravidade alta</span>
+    </div>
+  </div>
+
+  <!-- ABOUT VIEW -->
+  <div class="wrap" id="aboutView" style="display:none">
+    <div class="list-head"><h2>Acerca</h2></div>
+    <section class="block">
+      <div class="about-body">
+        <h4>O que é</h4>
+        <p><b>Microacessibilidades</b> regista barreiras à escala do passeio e da rua em Lisboa — piso
+        degradado, rampas e lancis em falta ou inadequados, obstáculos que reduzem a largura livre de
+        circulação, e falhas no piso podotátil ou nas travessias. Cada registo fica associado a uma
+        localização (GPS), uma fotografia e um nível de gravidade.</p>
+        <h4>Critérios de referência</h4>
+        <p>As categorias baseiam-se nas normas técnicas de acessibilidade para vias e espaços exteriores
+        do Decreto-Lei n.º 163/2006 (ex.: largura livre mínima do passeio, inclinação máxima de rampas,
+        lancis rebaixados nas passadeiras, piso podotátil de alerta e direcional). O registo é indicativo
+        e não substitui uma vistoria técnica formal.</p>
+        <h4>Dados e sincronização</h4>
+        <p>Os registos ficam sempre guardados primeiro no dispositivo — a app funciona offline depois da
+        primeira abertura. Quando a sincronização está configurada, os registos e fotografias passam
+        também a ficar disponíveis noutros dispositivos que usem o mesmo código de equipa (indicador
+        junto ao contador de registos, na lista).</p>
+        <h4>Exportação</h4>
+        <p>Podes exportar um registo (botão "Exportar" no formulário) ou todos (ícone junto ao contador,
+        na lista) em CSV, para usar em Excel ou noutro sistema de informação geográfica.</p>
+      </div>
+    </section>
+    <p class="about-version">Microacessibilidades — Lisboa</p>
+  </div>
+
+  <!-- FORM VIEW -->
+  <div class="wrap" id="formView" style="display:none">
+
+    <!-- Fotografia -->
+    <section class="block">
+      <div class="block-title">
+        <div><div class="eyebrow">Passo 1</div><h3>Fotografia da barreira</h3></div>
+      </div>
+      <div class="block-body">
+        <div class="photo-area" id="photoArea"></div>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" onchange="handlePhoto(this)" style="display:none">
+      </div>
+    </section>
+
+    <!-- Localização -->
+    <section class="block">
+      <div class="block-title">
+        <div><div class="eyebrow">Passo 2</div><h3>Localização</h3></div>
+      </div>
+      <div class="block-body">
+        <div class="field">
+          <label>Coordenadas</label>
+          <div class="geo-row">
+            <input type="text" id="fLat" placeholder="Latitude" inputmode="decimal" autocomplete="off" name="coord-lat">
+            <input type="text" id="fLon" placeholder="Longitude" inputmode="decimal" autocomplete="off" name="coord-lon">
+            <button class="geo-btn" id="geoBtn" onclick="getLoc()" title="Obter localização atual (GPS)" aria-label="Obter localização atual (GPS)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 2v3m0 14v3m10-10h-3M5 12H2m10 5a5 5 0 100-10 5 5 0 000 10z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:7px;line-height:1.4">Capturadas automaticamente ao fotografar a barreira — pode corrigi-las aqui ou tocar no ícone de GPS para as obter de novo.</div>
+        </div>
+        <div class="field">
+          <label for="fFreguesia">Freguesia</label>
+          <select id="fFreguesia"></select>
+        </div>
+        <div class="field">
+          <label for="fMorada">Local / referência</label>
+          <input type="text" id="fMorada" placeholder="Ex.: Rua Augusta, junto ao n.º 45" autocomplete="off" autocorrect="off" spellcheck="false" name="local-referencia">
+        </div>
+      </div>
+    </section>
+
+    <!-- Tipo de barreira -->
+    <section class="block">
+      <div class="block-title">
+        <div><div class="eyebrow">Passo 3</div><h3 class="required">Tipo de barreira</h3></div>
+      </div>
+      <div class="block-body">
+        <div class="field">
+          <div class="seg acts" id="fCategoria" role="group"></div>
+          <div id="subBadgeRow" style="margin-top:9px;display:none">
+            <button class="tag" id="subBadge" onclick="openSubSheet(current.categoria)"></button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Gravidade</label>
+          <div class="seg three" id="fGravidade" role="group">
+            <button class="opt baixa" data-v="Baixa" onclick="pickGrav(this)">Baixa</button>
+            <button class="opt media" data-v="Média" onclick="pickGrav(this)">Média</button>
+            <button class="opt alta" data-v="Alta" onclick="pickGrav(this)">Alta</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="fDescricao">Descrição / observações</label>
+          <textarea id="fDescricao" placeholder="Descreve a barreira encontrada…" autocomplete="off" spellcheck="false"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <button class="btn btn-ghost" onclick="saveRecord()" style="margin-bottom:10px">Guardar</button>
+    <div class="btn-row">
+      <button class="btn btn-ghost btn-danger" id="delBtn" style="display:none" onclick="askDelete()">Eliminar</button>
+      <button class="btn btn-ghost" onclick="exportOne()">Exportar</button>
+    </div>
+    <p class="hint">Os dados ficam guardados neste dispositivo. O registo é indicativo e não substitui uma vistoria técnica formal.</p>
+  </div>
+
+  <!-- Barra inferior (Registos / Mapa / Acerca) -->
+  <div class="bottombar" id="bottomBar">
+    <button class="fab-new" onclick="newRecord()" title="Novo registo" aria-label="Novo registo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+    </button>
+    <nav class="tabnav" id="tabNav">
+      <button class="tabnav-btn" id="navBtnList" onclick="goList()" aria-pressed="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>Registos</span>
+      </button>
+      <button class="tabnav-btn" id="navBtnMap" onclick="goMap()" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M9 4L3 6.5v13L9 17m0-13l6 2m-6-2v13m6-11l6-2.5v13L15 17m0-13v13m0-13l-6 2" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <span>Mapa</span>
+      </button>
+      <button class="tabnav-btn" id="navBtnAbout" onclick="goAbout()" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v6M12 7.5h.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <span>Acerca</span>
+      </button>
+    </nav>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="sheet-bg" id="sheetBg" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet">
+  <div class="grab"></div>
+  <h3 id="sheetTitle">Confirmar</h3>
+  <p id="sheetMsg"></p>
+  <button class="btn btn-danger" id="sheetOk">Eliminar</button>
+  <button class="btn btn-ghost" style="margin-top:9px" onclick="closeSheet()">Cancelar</button>
+</div>
+
+<div class="sheet-bg" id="subSheetBg" onclick="closeSubSheet()"></div>
+<div class="sheet" id="subSheet">
+  <div class="grab"></div>
+  <h3 id="subSheetTitle">Subcategoria</h3>
+  <p>Escolhe a subcategoria mais próxima (opcional).</p>
+  <div class="sub-options" id="subOptions"></div>
+  <button class="btn btn-ghost" style="margin-top:9px" onclick="closeSubSheet()">Fechar</button>
+</div>
+
+<script>
+/* ================= Categorias de barreira ================= */
+const CATEGORIAS = [
+  {k:"piso", n:"Piso e pavimento", tab:"Piso", emoji:"🧱",
+    sub:["Piso irregular ou degradado","Buracos ou depressões","Desnível sem rampa","Piso escorregadio quando molhado","Raízes de árvores a levantar o piso"]},
+  {k:"rampas", n:"Rampas e lancis", tab:"Rampas", emoji:"♿",
+    sub:["Rampa de acesso inexistente","Rampa com inclinação excessiva","Lancil demasiado alto","Rampa danificada ou obstruída"]},
+  {k:"obstaculos", n:"Obstáculos e largura livre", tab:"Obstáculos", emoji:"🚧",
+    sub:["Poste, sinal ou mobiliário urbano","Esplanada a ocupar o passeio","Veículo mal estacionado","Contentor de lixo","Largura livre insuficiente (< 1,20 m)"]},
+  {k:"podotatil", n:"Piso podotátil e travessias", tab:"Podotátil", emoji:"🦯",
+    sub:["Piso podotátil inexistente","Piso podotátil danificado ou descontínuo","Passadeira sem rebaixamento de lancil","Semáforo sem sinal sonoro","Sinalização de travessia deficiente"]}
+];
+const CATEGORIA_BY_KEY = {}; CATEGORIAS.forEach(c=>CATEGORIA_BY_KEY[c.k]=c);
+const GRAV_CLASS = {"Baixa":"baixa","Média":"media","Alta":"alta"};
+
+/* ================= Freguesias de Lisboa ================= */
+const FREGUESIAS = ["Ajuda","Alcântara","Alvalade","Areeiro","Arroios","Avenidas Novas","Beato","Belém",
+  "Benfica","Campo de Ourique","Campolide","Carnide","Estrela","Lumiar","Marvila","Misericórdia","Olivais",
+  "Parque das Nações","Penha de França","Santa Clara","Santa Maria Maior","Santo António",
+  "São Domingos de Benfica","São Vicente"];
+
+/* ================= Armazenamento (Claude storage → localStorage → memória) ================= */
+const KEY = "microacess_pedonal_v1";
+let memStore = null;
+const Store = {
+  async load(){
+    try{
+      if(window.storage && window.storage.get){
+        const r = await window.storage.get(KEY);
+        return r && r.value ? JSON.parse(r.value) : [];
+      }
+    }catch(e){}
+    try{
+      if(typeof localStorage!=="undefined"){
+        const v = localStorage.getItem(KEY);
+        return v ? JSON.parse(v) : [];
+      }
+    }catch(e){}
+    return memStore || [];
+  },
+  async save(data){
+    const s = JSON.stringify(data);
+    try{
+      if(window.storage && window.storage.set){ await window.storage.set(KEY, s); return; }
+    }catch(e){}
+    try{
+      if(typeof localStorage!=="undefined"){ localStorage.setItem(KEY, s); return; }
+    }catch(e){
+      memStore = data;
+      throw e;
+    }
+    memStore = data;
+  }
+};
+if(window.Sync) Sync.wrapStore(Store); // ponto único de integração com a sincronização (ver sync.js)
+
+/* ================= Estado ================= */
+let records = [];
+let current = null; // registo em edição
+let activeTab = "todas"; // "todas" | chave de CATEGORIAS
+let activeGravFilter = null; // null | "Baixa" | "Média" | "Alta"
+
+function blankRecord(){
+  return {id:"b"+Date.now()+Math.floor(Math.random()*999),
+    categoria:null,subcategoria:null,gravidade:null,
+    freguesia:"",morada:"",lat:"",lon:"",descricao:"",
+    foto:null,foto_url:null,criado:null,atualizado:null};
+}
+
+/* ================= Sincronização (UI) ================= */
+const SYNC_STATUS_LABEL={idle:"sincronizado",syncing:"a sincronizar…",error:"erro de sync",
+  offline:"offline",unconfigured:"sync desligado"};
+function updateSyncBadge(status){
+  const dot=document.getElementById("syncDot"), lbl=document.getElementById("syncLabel");
+  if(!dot||!lbl) return;
+  dot.className="sync-dot "+status;
+  const equipa=(window.Sync&&Sync.configured)?Sync.getEquipa():null;
+  lbl.textContent=(SYNC_STATUS_LABEL[status]||status)+(equipa?" · "+equipa:"");
+}
+function changeEquipa(){
+  if(!window.Sync||!Sync.configured){
+    toast("Sincronização não configurada — preencha as chaves em sync.js");
+    return;
+  }
+  const atual=Sync.getEquipa();
+  const novo=window.prompt("Código de equipa (partilhado entre dispositivos):",atual);
+  if(novo===null) return;
+  const val=Sync.setEquipa(novo);
+  updateSyncBadge("syncing");
+  toast("Equipa alterada para \""+val+"\" — a sincronizar…");
+}
+
+/* ================= Arranque ================= */
+(async function init(){
+  records = await Store.load();
+  buildFreguesiaOptions();
+  renderTabBar();
+  renderList();
+  updateSyncBadge(window.Sync&&Sync.configured?"syncing":"unconfigured");
+  if(window.Sync){
+    Sync.init({
+      records,
+      onChange(updated){ records=updated; if(topView==="map") renderMap(); else renderList(); },
+      onStatus(status){ updateSyncBadge(status); }
+    });
+  }
+})();
+function buildFreguesiaOptions(){
+  const sel=document.getElementById("fFreguesia");
+  sel.innerHTML=`<option value="">— Freguesia —</option>`+
+    FREGUESIAS.map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join("");
+}
+
+/* ================= Navegação ================= */
+let topView="list"; // "list" | "map" | "about"
+function setActiveNav(view){
+  const ids={list:"navBtnList",map:"navBtnMap",about:"navBtnAbout"};
+  Object.values(ids).forEach(id=>document.getElementById(id).setAttribute("aria-pressed","false"));
+  if(ids[view]) document.getElementById(ids[view]).setAttribute("aria-pressed","true");
+}
+function showTopView(view){
+  document.getElementById("listView").style.display = view==="list" ? "" : "none";
+  document.getElementById("mapView").style.display = view==="map" ? "" : "none";
+  document.getElementById("aboutView").style.display = view==="about" ? "" : "none";
+  document.getElementById("formView").style.display = "none";
+  document.getElementById("bottomBar").style.display = "";
+  document.getElementById("backBtn").style.display = "none";
+  setActiveNav(view);
+  topView=view;
+  current=null; window.scrollTo(0,0);
+}
+function goList(){
+  showTopView("list");
+  document.getElementById("topTitle").textContent="Microacessibilidades";
+  document.getElementById("topSub").textContent="Lisboa · Espaço público";
+  renderList();
+}
+function goMap(){
+  showTopView("map");
+  document.getElementById("topTitle").textContent="Mapa";
+  document.getElementById("topSub").textContent="Localização dos registos";
+  renderMap();
+}
+function goAbout(){
+  showTopView("about");
+  document.getElementById("topTitle").textContent="Acerca";
+  document.getElementById("topSub").textContent="Microacessibilidades";
+}
+function goForm(){
+  document.getElementById("listView").style.display="none";
+  document.getElementById("mapView").style.display="none";
+  document.getElementById("aboutView").style.display="none";
+  document.getElementById("formView").style.display="";
+  document.getElementById("bottomBar").style.display="none";
+  document.getElementById("backBtn").style.display="";
+  window.scrollTo(0,0);
+}
+
+/* ================= Mapa ================= */
+let mapInstance=null, mapMarkersLayer=null;
+function renderMap(){
+  const withCoords = records.filter(r=>{
+    const lat=parseFloat(r.lat), lon=parseFloat(r.lon);
+    return !isNaN(lat) && !isNaN(lon);
+  });
+  document.getElementById("mapCountPill").textContent =
+    withCoords.length ? withCoords.length+(withCoords.length===1?" ponto":" pontos") : "";
+  document.getElementById("mapEmpty").style.display = withCoords.length ? "none" : "";
+  document.getElementById("mapCanvas").style.display = withCoords.length ? "" : "none";
+  if(!withCoords.length) return;
+
+  if(!mapInstance){
+    mapInstance = L.map("mapCanvas", {zoomControl:true});
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+    }).addTo(mapInstance);
+    mapMarkersLayer = L.layerGroup().addTo(mapInstance);
+  }
+
+  mapMarkersLayer.clearLayers();
+  let latest=null;
+  withCoords.forEach(r=>{
+    const lat=parseFloat(r.lat), lon=parseFloat(r.lon);
+    const cls=GRAV_CLASS[r.gravidade]||"inc";
+    const icon=L.divIcon({className:"",html:`<span class="marker-dot ${cls}"></span>`,iconSize:[16,16],iconAnchor:[8,8]});
+    const cat=CATEGORIA_BY_KEY[r.categoria];
+    const nm = r.subcategoria ? esc(r.subcategoria) : (cat ? esc(cat.n) : "Barreira");
+    L.marker([lat,lon],{icon})
+      .bindPopup(`<div class="map-popup"><div class="nm">${nm}</div><a href="#" onclick="openRecord('${r.id}');return false;">Ver registo</a></div>`)
+      .addTo(mapMarkersLayer);
+    if(!latest || (r.atualizado||0) > (latest.atualizado||0)) latest = {lat, lon, atualizado:r.atualizado};
+  });
+  setTimeout(()=>{
+    mapInstance.invalidateSize();
+    mapInstance.setView([latest.lat, latest.lon], 16); // enquadra sempre o registo mais recente
+  },50);
+}
+
+/* ================= Lista ================= */
+function renderTabBar(){
+  const bar=document.getElementById("tabBar");
+  const tabs=[{k:"todas",n:"Todas"}].concat(CATEGORIAS.map(c=>({k:c.k,n:c.tab})));
+  bar.innerHTML=tabs.map(t=>
+    `<button class="tab" data-f="${t.k}" aria-pressed="${activeTab===t.k}" onclick="setTab('${t.k}')">${esc(t.n)}</button>`
+  ).join("");
+}
+function setTab(f){ activeTab=f; renderTabBar(); renderList(); }
+function setGravFilter(g){
+  activeGravFilter = activeGravFilter===g ? null : g; // tocar outra vez desliga o filtro
+  renderList();
+}
+function filteredRecords(){
+  if(activeTab==="todas") return records.slice();
+  return records.filter(r=>r.categoria===activeTab);
+}
+
+const EMPTY_MSG={
+  todas:{ico:"🚧",t:"Ainda sem registos",s:"Toque em “Novo registo” para começar a assinalar uma barreira."},
+  filtro:{ico:"🔎",t:"Sem registos nesta categoria",s:"Toque noutra categoria ou em “Todas”."}
+};
+const GRAV_EMPTY_MSG={
+  Baixa:{ico:"🟢",t:"Sem registos de gravidade baixa",s:"Toque no número total para ver todos."},
+  Média:{ico:"🟠",t:"Sem registos de gravidade média",s:"Toque no número total para ver todos."},
+  Alta:{ico:"🔴",t:"Sem registos de gravidade alta",s:"Toque no número total para ver todos."}
+};
+
+function renderSummary(list){
+  const el=document.getElementById("summaryCard");
+  let baixa=0,media=0,alta=0;
+  list.forEach(r=>{
+    if(r.gravidade==="Baixa")baixa++; else if(r.gravidade==="Média")media++; else if(r.gravidade==="Alta")alta++;
+  });
+  const total=list.length;
+  const catTab=CATEGORIA_BY_KEY[activeTab];
+  const lbl=(total===1?"registo":"registos")+(catTab?" · "+catTab.tab:"");
+  const active=g=>activeGravFilter===g?" active":"";
+  el.innerHTML=`
+    <button class="s-big clickable" onclick="setGravFilter(null)" title="Ver todos">
+      <span class="s-num">${total}</span><span class="s-lbl">${lbl}</span>
+    </button>
+    <div class="s-stats">
+      <button class="s-stat baixa clickable${active('Baixa')}" onclick="setGravFilter('Baixa')"><div class="n">${baixa}</div><div class="t">Baixa</div></button>
+      <button class="s-stat media clickable${active('Média')}" onclick="setGravFilter('Média')"><div class="n">${media}</div><div class="t">Média</div></button>
+      <button class="s-stat alta clickable${active('Alta')}" onclick="setGravFilter('Alta')"><div class="n">${alta}</div><div class="t">Alta</div></button>
+    </div>`;
+}
+
+function relDate(ms){
+  if(!ms) return "";
+  return new Date(ms).toLocaleDateString("pt-PT",{day:"numeric",month:"short",year:"numeric"});
+}
+function renderList(){
+  const body=document.getElementById("listBody");
+  const summary=document.getElementById("summaryCard"), tabbar=document.getElementById("tabBar");
+  document.getElementById("countPill").textContent =
+    records.length ? records.length+(records.length===1?" registo":" registos") : "";
+
+  if(!records.length){
+    summary.style.display="none"; tabbar.style.display="none";
+    body.innerHTML=`<div class="empty"><div class="ico">🚧</div>
+      <p>Ainda sem registos</p>
+      <span>Toque em “Novo registo” para começar a assinalar uma barreira.</span></div>`;
+    return;
+  }
+  summary.style.display=""; tabbar.style.display="";
+  const list=filteredRecords();
+  renderSummary(list);
+
+  const displayList = activeGravFilter ? list.filter(r=>r.gravidade===activeGravFilter) : list;
+
+  if(!displayList.length){
+    const m = activeGravFilter ? GRAV_EMPTY_MSG[activeGravFilter] : (activeTab==="todas" ? EMPTY_MSG.todas : EMPTY_MSG.filtro);
+    body.innerHTML=`<div class="empty"><div class="ico">${m.ico}</div><p>${m.t}</p><span>${m.s}</span></div>`;
+    return;
+  }
+  const sorted=[...displayList].sort((a,b)=>(b.atualizado||0)-(a.atualizado||0));
+  body.innerHTML=`<div class="card-list">`+sorted.map(r=>{
+    const cat=CATEGORIA_BY_KEY[r.categoria];
+    const gcls=GRAV_CLASS[r.gravidade];
+    const badge = gcls ? `<span class="badge ${gcls}">${esc(r.gravidade)}</span>` : `<span class="badge inc">Sem gravidade</span>`;
+    const nm = r.subcategoria ? esc(r.subcategoria) : (cat ? esc(cat.n) : "Sem categoria");
+    const meta=[];
+    if(cat) meta.push(`<span class="tag">${esc(cat.n)}</span>`);
+    if(r.freguesia) meta.push(esc(r.freguesia));
+    meta.push(relDate(r.atualizado||r.criado));
+    const thumb = (r.foto||r.foto_url)
+      ? `<span class="thumb" style="background-image:url('${r.foto||r.foto_url}')"></span>`
+      : `<span class="thumb empty">${cat?cat.emoji:"🚧"}</span>`;
+    return `<button class="estab" onclick="openRecord('${r.id}')">
+      ${thumb}
+      <div class="estab-body">
+        <div class="row1"><span class="nm">${nm}</span>${badge}</div>
+        <div class="meta">${meta.join('<span class="dot"></span>')}</div>
+      </div></button>`;
+  }).join("")+`</div>`;
+}
+
+/* ================= Abrir / criar ================= */
+function newRecord(){ current=blankRecord(); buildForm(); goForm(); }
+function openRecord(id){ current=JSON.parse(JSON.stringify(records.find(r=>r.id===id))); buildForm(); goForm(); }
+
+function buildForm(){
+  const r=current;
+  const cat=CATEGORIA_BY_KEY[r.categoria];
+  document.getElementById("topTitle").textContent = (r.subcategoria || (cat&&cat.n)) || "Novo registo";
+  document.getElementById("topSub").textContent = r.criado ? "A editar registo" : "Novo registo";
+  document.getElementById("fLat").value=r.lat||"";
+  document.getElementById("fLon").value=r.lon||"";
+  document.getElementById("fFreguesia").value=r.freguesia||"";
+  document.getElementById("fMorada").value=r.morada||"";
+  document.getElementById("fDescricao").value=r.descricao||"";
+  renderCategoriaSeg();
+  setSeg("fGravidade",r.gravidade);
+  renderSubBadge();
+  document.getElementById("delBtn").style.display = r.criado ? "" : "none";
+  renderPhoto();
+  // ligar inputs de texto
+  document.getElementById("fLat").oninput=e=>current.lat=e.target.value;
+  document.getElementById("fLon").oninput=e=>current.lon=e.target.value;
+  document.getElementById("fFreguesia").onchange=e=>current.freguesia=e.target.value;
+  document.getElementById("fMorada").oninput=e=>current.morada=e.target.value;
+  document.getElementById("fDescricao").oninput=e=>current.descricao=e.target.value;
+}
+
+/* ================= Interações ================= */
+function renderCategoriaSeg(){
+  const g=document.getElementById("fCategoria");
+  g.innerHTML=CATEGORIAS.map(c=>
+    `<button class="opt cat" data-v="${c.k}" aria-pressed="${current.categoria===c.k}" onclick="pickCategoria(this)">${c.emoji} ${esc(c.n)}</button>`
+  ).join("");
+}
+function pickCategoria(btn){
+  const g=btn.parentElement;
+  const v=btn.dataset.v;
+  const same = current.categoria===v;
+  [...g.children].forEach(b=>b.setAttribute("aria-pressed","false"));
+  if(same){
+    current.categoria=null; current.subcategoria=null;
+  }else{
+    btn.setAttribute("aria-pressed","true");
+    current.categoria=v; current.subcategoria=null; // nova categoria → limpa subcategoria antiga
+  }
+  renderSubBadge();
+  const cat=CATEGORIA_BY_KEY[current.categoria];
+  document.getElementById("topTitle").textContent = cat ? cat.n : "Novo registo";
+  if(!same && current.categoria) openSubSheet(current.categoria);
+}
+
+/* ---- Subcategoria ---- */
+function renderSubBadge(){
+  const row=document.getElementById("subBadgeRow"), badge=document.getElementById("subBadge");
+  if(current.subcategoria){ badge.textContent=current.subcategoria; row.style.display=""; }
+  else{ row.style.display="none"; }
+}
+function openSubSheet(categoriaKey){
+  const cat=CATEGORIA_BY_KEY[categoriaKey];
+  if(!cat||!cat.sub||!cat.sub.length) return;
+  document.getElementById("subSheetTitle").textContent="Subcategoria — "+cat.n;
+  document.getElementById("subOptions").innerHTML=cat.sub.map(o=>
+    `<button class="sub-opt" data-v="${esc(o)}" aria-pressed="${current.subcategoria===o}" onclick="pickSubcategoria(this)">${esc(o)}</button>`
+  ).join("");
+  document.getElementById("subSheetBg").classList.add("show");
+  document.getElementById("subSheet").classList.add("show");
+}
+function closeSubSheet(){
+  document.getElementById("subSheetBg").classList.remove("show");
+  document.getElementById("subSheet").classList.remove("show");
+}
+function pickSubcategoria(btn){
+  const v=btn.dataset.v;
+  current.subcategoria = current.subcategoria===v ? null : v;
+  renderSubBadge();
+  const cat=CATEGORIA_BY_KEY[current.categoria];
+  document.getElementById("topTitle").textContent = current.subcategoria || (cat&&cat.n) || "Novo registo";
+  closeSubSheet();
+}
+
+function pickGrav(btn){
+  const g=btn.parentElement;
+  const same = current.gravidade===btn.dataset.v;
+  [...g.children].forEach(b=>b.setAttribute("aria-pressed","false"));
+  if(same){ current.gravidade=null; }
+  else{ btn.setAttribute("aria-pressed","true"); current.gravidade=btn.dataset.v; }
+}
+function setSeg(gid,val){
+  const g=document.getElementById(gid);
+  [...g.children].forEach(b=>b.setAttribute("aria-pressed", b.dataset.v===val ? "true":"false"));
+}
+
+/* ---- Fotografia da barreira ---- */
+function renderPhoto(){
+  const area=document.getElementById("photoArea");
+  if(!area) return;
+  if(current.foto||current.foto_url){
+    area.innerHTML=`<div class="photo-preview">
+        <img src="${current.foto||current.foto_url}" alt="Foto da barreira">
+      </div>
+      <div class="photo-actions">
+        <button class="photo-act" onclick="document.getElementById('photoInput').click()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 8h3l1.5-2h7L17 8h3v11H4V8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3" stroke="currentColor" stroke-width="2"/></svg>
+          Substituir foto
+        </button>
+        <button class="photo-act danger" onclick="removePhoto()">Remover</button>
+      </div>`;
+  }else{
+    area.innerHTML=`<button class="photo-drop" onclick="document.getElementById('photoInput').click()">
+      <span class="pd-ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M4 8h3l1.5-2h7L17 8h3v11H4V8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="2"/></svg></span>
+      <span class="pd-title">Fotografar a barreira</span>
+      <span class="pd-sub">Toque para abrir a câmara</span>
+    </button>`;
+  }
+}
+function handlePhoto(input){
+  const file=input.files&&input.files[0];
+  if(!file){ return; }
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      const max=1024; let w=img.width, h=img.height;
+      if(w>h && w>max){ h=Math.round(h*max/w); w=max; }
+      else if(h>=w && h>max){ w=Math.round(w*max/h); h=max; }
+      const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+      cv.getContext("2d").drawImage(img,0,0,w,h);
+      current.foto=cv.toDataURL("image/jpeg",0.7);
+      current.foto_url=null; // força novo envio para o Storage (ver sync.js)
+      renderPhoto(); toast("Foto adicionada");
+      getLoc(); // captura automática e sequencial das coordenadas a cada foto — o valor pode sempre ser corrigido à mão
+    };
+    img.onerror=()=>toast("Não foi possível ler a imagem");
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+  input.value=""; // permite voltar a escolher o mesmo ficheiro
+}
+function removePhoto(){ current.foto=null; current.foto_url=null; renderPhoto(); }
+
+/* ================= GPS ================= */
+function getLoc(){
+  const btn=document.getElementById("geoBtn");
+  if(!navigator.geolocation){toast("GPS não disponível neste dispositivo");return;}
+  btn.classList.add("loading");
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const lat=pos.coords.latitude.toFixed(6), lon=pos.coords.longitude.toFixed(6);
+    document.getElementById("fLat").value=lat; current.lat=lat;
+    document.getElementById("fLon").value=lon; current.lon=lon;
+    btn.classList.remove("loading"); toast("Coordenadas capturadas");
+  },err=>{
+    btn.classList.remove("loading");
+    toast(err.code===1?"Permissão de localização recusada":"Não foi possível obter a localização");
+  },{enableHighAccuracy:true,timeout:12000,maximumAge:0});
+}
+
+/* ================= Guardar / eliminar ================= */
+async function saveRecord(){
+  if(!current.categoria){ toast("Escolha o tipo de barreira"); return; }
+  const now=Date.now();
+  if(!current.criado)current.criado=now;
+  current.atualizado=now;
+  const i=records.findIndex(r=>r.id===current.id);
+  if(i>=0)records[i]=current; else records.push(current);
+  try{
+    await Store.save(records);
+  }catch(e){
+    toast("Não guardou — armazenamento cheio. Exporte e elimine registos antigos (sobretudo com fotos).");
+    return; // fica no formulário: não navega como se tivesse gravado
+  }
+  const kb=Math.round(JSON.stringify(records).length/1024);
+  toast(kb>4200 ? "Guardado — memória quase cheia, exporte os dados" : "Guardado");
+  setTimeout(goList,600);
+}
+function askDelete(){
+  openSheet("Eliminar registo","Esta ação remove o registo deste dispositivo e não pode ser anulada.",async()=>{
+    records=records.filter(r=>r.id!==current.id);
+    await Store.save(records); closeSheet(); toast("Registo eliminado"); setTimeout(goList,400);
+  });
+}
+
+/* ================= Exportação ================= */
+function recToRow(r){
+  const cat=CATEGORIA_BY_KEY[r.categoria];
+  return { Categoria:cat?cat.n:"", Subcategoria:r.subcategoria||"", Gravidade:r.gravidade||"",
+    Freguesia:r.freguesia||"", "Local / referência":r.morada||"",
+    Latitude:r.lat||"", Longitude:r.lon||"", "Tem foto":(r.foto||r.foto_url)?"Sim":"Não",
+    "Foto URL":r.foto_url||"", "Descrição":r.descricao||"",
+    "Criado em":r.criado?new Date(r.criado).toLocaleString("pt-PT"):"",
+    "Atualizado em":r.atualizado?new Date(r.atualizado).toLocaleString("pt-PT"):"" };
+}
+function toCSV(rows){
+  if(!rows.length)return"";
+  const cols=Object.keys(rows[0]);
+  const esc=v=>{v=(v==null?"":String(v));return /[",;\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  return cols.join(";")+"\n"+rows.map(r=>cols.map(c=>esc(r[c])).join(";")).join("\n");
+}
+function download(name,text,type){
+  try{
+    const withBom = /csv/i.test(type) ? "﻿"+text : text;
+    const blob=new Blob([withBom],{type});const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);
+    a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+    toast("Ficheiro exportado");
+  }catch(e){
+    navigator.clipboard&&navigator.clipboard.writeText(text);
+    toast("Copiado para a área de transferência");
+  }
+}
+function exportOne(){
+  const csv=toCSV([recToRow(current)]);
+  const cat=CATEGORIA_BY_KEY[current.categoria];
+  const nm=((current.subcategoria||(cat&&cat.n))||"registo").replace(/[^\w\-]+/g,"_").slice(0,40);
+  download(nm+".csv",csv,"text/csv;charset=utf-8");
+}
+function exportAll(){
+  if(!records.length){toast("Sem registos para exportar");return;}
+  download("microacessibilidades_"+new Date().toISOString().slice(0,10)+".csv",
+    toCSV(records.map(recToRow)),"text/csv;charset=utf-8");
+}
+
+/* ================= Sheet + toast ================= */
+let sheetCb=null;
+function openSheet(title,msg,cb,okLabel,okClass){
+  document.getElementById("sheetTitle").textContent=title;
+  document.getElementById("sheetMsg").textContent=msg;
+  const ok=document.getElementById("sheetOk");
+  ok.textContent=okLabel||"Eliminar";
+  ok.className="btn "+(okClass||"btn-danger");
+  sheetCb=cb; ok.onclick=cb;
+  document.getElementById("sheetBg").classList.add("show");
+  document.getElementById("sheet").classList.add("show");
+}
+function closeSheet(){
+  document.getElementById("sheetBg").classList.remove("show");
+  document.getElementById("sheet").classList.remove("show");
+}
+let toastT=null;
+function toast(msg){
+  const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),2200);
+}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+/* Exportar tudo via toque longo no título */
+document.querySelector(".list-head h2").addEventListener("dblclick",exportAll);
+</script>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
