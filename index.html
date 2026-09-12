@@ -92,6 +92,7 @@
     background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);
     border:1px solid var(--line-soft);padding:13px 14px;width:100%;text-align:left;
     display:flex;align-items:center;gap:13px;
+    -webkit-touch-callout:none;-webkit-user-select:none;user-select:none;
   }
   .estab-body{flex:1;min-width:0}
   .thumb{
@@ -291,6 +292,9 @@
     background:#fff;font-weight:600;font-size:14.5px;color:var(--ink-soft);text-align:left}
   .sub-opt:active{background:var(--line-soft)}
   .sub-opt[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+  .sub-opt.danger{color:var(--no);border-color:#F3C9C9;background:var(--no-soft)}
+  .sub-opt.danger:active{background:#F7D9D9}
+  .sub-opt-ico{margin-right:4px}
 
   .hint{font-size:12px;color:var(--muted);margin:14px 4px 0;text-align:center;line-height:1.5}
   .vlegend{display:flex;gap:14px;margin-top:12px;font-size:11.5px;color:var(--ink-soft);font-weight:600;flex-wrap:wrap}
@@ -497,6 +501,19 @@
   <button class="btn btn-ghost" style="margin-top:9px" onclick="closeSubSheet()">Fechar</button>
 </div>
 
+<div class="sheet-bg" id="cardMenuBg" onclick="closeCardMenu()"></div>
+<div class="sheet" id="cardMenu">
+  <div class="grab"></div>
+  <h3 id="cardMenuTitle">Registo</h3>
+  <div class="sub-options">
+    <button class="sub-opt" onclick="cardMenuAction('editar')"><span class="sub-opt-ico">✏️</span>Editar</button>
+    <button class="sub-opt danger" onclick="cardMenuAction('eliminar')"><span class="sub-opt-ico">🗑️</span>Eliminar</button>
+    <button class="sub-opt" onclick="cardMenuAction('partilhar')"><span class="sub-opt-ico">📤</span>Partilhar</button>
+    <button class="sub-opt" onclick="cardMenuAction('exportar')"><span class="sub-opt-ico">⬇️</span>Exportar</button>
+  </div>
+  <button class="btn btn-ghost" style="margin-top:9px" onclick="closeCardMenu()">Cancelar</button>
+</div>
+
 <script>
 /* ================= Categorias de barreira ================= */
 const CATEGORIAS = [
@@ -596,6 +613,7 @@ function changeEquipa(){
   renderTabBar();
   renderList();
   updateSyncBadge(window.Sync&&Sync.configured?"syncing":"unconfigured");
+  attachCardGestures();
   if(window.Sync){
     Sync.init({
       records,
@@ -786,13 +804,124 @@ function renderList(){
     const thumb = (r.foto||r.foto_url)
       ? `<span class="thumb" style="background-image:url('${r.foto||r.foto_url}')"></span>`
       : `<span class="thumb empty">${cat?cat.emoji:"🚧"}</span>`;
-    return `<button class="estab" onclick="openRecord('${r.id}')">
+    return `<button class="estab" data-id="${r.id}">
       ${thumb}
       <div class="estab-body">
         <div class="row1"><span class="nm">${nm}</span>${badge}</div>
         <div class="meta">${meta.join('<span class="dot"></span>')}</div>
       </div></button>`;
   }).join("")+`</div>`;
+}
+
+/* ================= Toque prolongado nos cartões (menu de ações) ================= */
+const LONG_PRESS_MS = 500, LONG_PRESS_TOLERANCE = 10;
+let pressTimer=null, pressStart=null, pressId=null, longPressFired=false;
+function attachCardGestures(){
+  const body=document.getElementById("listBody");
+  body.addEventListener("pointerdown", onCardPointerDown);
+  body.addEventListener("pointermove", onCardPointerMove);
+  body.addEventListener("pointerup", onCardPointerUp);
+  body.addEventListener("pointercancel", onCardPointerCancel);
+  body.addEventListener("pointerleave", onCardPointerCancel);
+  body.addEventListener("contextmenu", e=>{ if(e.target.closest(".estab")) e.preventDefault(); });
+}
+function onCardPointerDown(e){
+  const card=e.target.closest(".estab");
+  if(!card) return;
+  longPressFired=false;
+  pressId=card.dataset.id;
+  pressStart={x:e.clientX,y:e.clientY};
+  clearTimeout(pressTimer);
+  pressTimer=setTimeout(()=>{
+    longPressFired=true;
+    if(navigator.vibrate) navigator.vibrate(12);
+    openCardMenu(pressId);
+  }, LONG_PRESS_MS);
+}
+function onCardPointerMove(e){
+  if(!pressStart) return;
+  const dx=e.clientX-pressStart.x, dy=e.clientY-pressStart.y;
+  if(Math.hypot(dx,dy)>LONG_PRESS_TOLERANCE){ clearTimeout(pressTimer); pressStart=null; }
+}
+function onCardPointerUp(e){
+  clearTimeout(pressTimer);
+  const card=e.target.closest(".estab");
+  if(card && !longPressFired && pressId===card.dataset.id) openRecord(card.dataset.id);
+  pressStart=null;
+}
+function onCardPointerCancel(){ clearTimeout(pressTimer); pressStart=null; }
+
+let cardMenuId=null;
+function openCardMenu(id){
+  const r=records.find(x=>x.id===id);
+  if(!r) return;
+  cardMenuId=id;
+  const cat=CATEGORIA_BY_KEY[r.categoria];
+  document.getElementById("cardMenuTitle").textContent = r.subcategoria || (cat&&cat.n) || "Registo";
+  document.getElementById("cardMenuBg").classList.add("show");
+  document.getElementById("cardMenu").classList.add("show");
+}
+function closeCardMenu(){
+  document.getElementById("cardMenuBg").classList.remove("show");
+  document.getElementById("cardMenu").classList.remove("show");
+  cardMenuId=null;
+}
+function cardMenuAction(action){
+  const id=cardMenuId;
+  closeCardMenu();
+  if(!id) return;
+  if(action==="editar") openRecord(id);
+  else if(action==="eliminar") confirmDeleteById(id);
+  else if(action==="partilhar") shareRecordById(id);
+  else if(action==="exportar") exportRecordById(id);
+}
+function confirmDeleteById(id){
+  const r=records.find(x=>x.id===id);
+  if(!r) return;
+  openSheet("Eliminar registo","Esta ação remove o registo deste dispositivo e não pode ser anulada.",async()=>{
+    records=records.filter(x=>x.id!==id);
+    await Store.save(records); closeSheet(); toast("Registo eliminado"); renderList();
+  });
+}
+async function shareRecordById(id){
+  const r=records.find(x=>x.id===id);
+  if(!r) return;
+  const cat=CATEGORIA_BY_KEY[r.categoria];
+  const titulo = r.subcategoria || (cat&&cat.n) || "Barreira";
+  const linhas=[titulo];
+  if(cat && r.subcategoria) linhas.push(cat.n);
+  if(r.gravidade) linhas.push("Gravidade: "+r.gravidade);
+  if(r.freguesia) linhas.push("Freguesia: "+r.freguesia);
+  if(r.morada) linhas.push(r.morada);
+  if(r.lat && r.lon) linhas.push("https://www.google.com/maps?q="+r.lat+","+r.lon);
+  if(r.descricao) linhas.push(r.descricao);
+  const texto=linhas.join("\n");
+  if(navigator.share){
+    const shareData={title:titulo, text:texto};
+    const src=r.foto||r.foto_url;
+    if(src && navigator.canShare){
+      try{
+        const blob=await (await fetch(src)).blob();
+        const file=new File([blob],"barreira.jpg",{type:blob.type||"image/jpeg"});
+        if(navigator.canShare({files:[file]})) shareData.files=[file];
+      }catch(e){}
+    }
+    try{ await navigator.share(shareData); }
+    catch(e){ if(e && e.name!=="AbortError") toast("Não foi possível partilhar"); }
+  }else if(navigator.clipboard){
+    navigator.clipboard.writeText(texto);
+    toast("Copiado para a área de transferência");
+  }else{
+    toast("Partilha não suportada neste navegador");
+  }
+}
+function exportRecordById(id){
+  const r=records.find(x=>x.id===id);
+  if(!r) return;
+  const cat=CATEGORIA_BY_KEY[r.categoria];
+  const csv=toCSV([recToRow(r)]);
+  const nm=((r.subcategoria||(cat&&cat.n))||"registo").replace(/[^\w\-]+/g,"_").slice(0,40);
+  download(nm+".csv",csv,"text/csv;charset=utf-8");
 }
 
 /* ================= Abrir / criar ================= */
